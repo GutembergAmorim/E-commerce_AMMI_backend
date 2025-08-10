@@ -1,3 +1,4 @@
+import 'dotenv/config';
 import express from "express";
 import publicRoutes from "./routes/public.js";
 import privateRoutes from "./routes/private.js";
@@ -5,13 +6,21 @@ import privateRoutes from "./routes/private.js";
 const app = express();
 app.use(express.json());
 
-app.use("/", publicRoutes);
-app.use('/', privateRoutes);
+// Public and private routes under a common API prefix
+app.use("/api", publicRoutes);
+app.use("/api", privateRoutes);
 
-
-app.listen(3000, () => {
-  console.log("  Servidor rodando na porta 3000");
+// Healthcheck endpoint
+app.get("/health", (_, res) => {
+  res.status(200).json({ status: "ok" });
 });
 
-//gutembergpy
-//pvVzEwgjBl9AMGqL
+// 404 handler
+app.use((req, res) => {
+  res.status(404).json({ message: "Not found" });
+});
+
+const PORT = process.env.PORT || 3000;
+app.listen(PORT, () => {
+  console.log(`Servidor rodando na porta ${PORT}`);
+});
