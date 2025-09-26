@@ -1,19 +1,42 @@
 import express from "express";
-import { PrismaClient } from "../generated/prisma/client.js";
-import { Prisma } from "@prisma/client";
+import { PrismaClient } from "@prisma/client";
 
 const router = express.Router();
 const prisma = new PrismaClient();
 
 router.get("/users", async (req, res) => {
   try {
-    const users = await prisma.user.findMany({ omit: { password: true } });
+    const users = await prisma.user.findMany({
+      select: { id: true, name: true, cpf: true, email: true },
+    });
 
-    res.status(200).json({ messeger: "Usuarios encontratos", users });
+    return res.status(200).json({ message: "Usuários encontrados", users });
   } catch (error) {
-    res
+    return res
       .status(500)
-      .json({ messeger: "Falha no servidor", error: error.messeger });
+      .json({ message: "Falha no servidor", error: error.message });
+  }
+});
+
+// Dados do usuário autenticado
+router.get("/me", async (req, res) => {
+  try {
+    const userId = req.userId;
+    if (!userId) {
+      return res.status(401).json({ message: "Não autenticado" });
+    }
+    const user = await prisma.user.findUnique({
+      where: { id: userId },
+      select: { id: true, name: true, cpf: true, email: true },
+    });
+    if (!user) {
+      return res.status(404).json({ message: "Usuário não encontrado" });
+    }
+    return res.status(200).json({ user });
+  } catch (error) {
+    return res
+      .status(500)
+      .json({ message: "Falha no servidor", error: error.message });
   }
 });
 

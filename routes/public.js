@@ -1,6 +1,6 @@
 import express from "express";
 import bcrypt from "bcrypt";
-import { PrismaClient } from "../generated/prisma/client.js";
+import { PrismaClient, Prisma } from "@prisma/client";
 import jwt from "jsonwebtoken";
 
 const prisma = new PrismaClient();
@@ -8,64 +8,71 @@ const router = express.Router();
 
 const JWT_SECRET = process.env.JWT_SECRET;
 
-//Cadastro de usuário
+// Cadastro de usuário
 router.post("/register", async (req, res) => {
   try {
-    const user = req.body;
+    const { name, cpf, email, password } = req.body || {};
+
+    if (!name || !cpf || !email || !password) {
+      return res
+        .status(400)
+        .json({ message: "Campos obrigatórios: name, cpf, email, password" });
+    }
 
     const salt = await bcrypt.genSalt(10);
-    const hashPassword = await bcrypt.hash(user.password, salt);
+    const hashPassword = await bcrypt.hash(password, salt);
 
     const newUser = await prisma.user.create({
-      data: {
-        name: user.name,
-        cpf: user.cpf,
-        email: user.email,
-        password: hashPassword,
-      },
+      data: { name, cpf, email, password: hashPassword },
     });
-    // Removendo a senha da resposta para não expor o hash
-    const { password, ...userWithoutPassword } = newUser;
-    res.status(201).json(userWithoutPassword);
+
+    const { password: _password, ...userWithoutPassword } = newUser;
+    return res.status(201).json(userWithoutPassword);
   } catch (error) {
-    res
+    if (
+      error instanceof Prisma.PrismaClientKnownRequestError &&
+      error.code === "P2002"
+    ) {
+      return res.status(409).json({ message: "CPF ou email já cadastrados" });
+    }
+    return res
       .status(500)
       .json({ message: "Erro ao cadastrar usuário", error: error.message });
   }
 });
 
-//Login de usuário
+// Login de usuário
 router.post("/login", async (req, res) => {
   try {
-    const userInfo = req.body;
+    const { email, password } = req.body || {};
 
-    // Verifica se o usuário existe
-    const user = await prisma.user.findUnique({
-      where: { email: userInfo.email },
-    });
+    if (!email || !password) {
+      return res
+        .status(400)
+        .json({ message: "Campos obrigatórios: email e password" });
+    }
 
-    // Se o usuário não existir, retorna erro
+    if (!JWT_SECRET) {
+      return res.status(500).json({ message: "JWT_SECRET não configurado" });
+    }
+
+    const user = await prisma.user.findUnique({ where: { email } });
     if (!user) {
       return res.status(404).json({ message: "Email ou senha inválidos" });
     }
 
-    // Verifica se a senha está correta
-    const validPassword = await bcrypt.compare(
-      userInfo.password,
-      user.password
-    );
-
-    // Se a senha estiver incorreta, retorna erro
+    const validPassword = await bcrypt.compare(password, user.password);
     if (!validPassword) {
       return res.status(401).json({ message: "Email ou senha inválidos" });
     }
 
-    // Gerar token JWT e remover a senha da resposta
-    const token = jwt.sign({ id: user.id }, JWT_SECRET, { expiresIn: "1m" });
-    const { password, ...userWithoutPassword } = user;
-    res.status(200).json({ message: "Login bem-sucedido", token, user: userWithoutPassword });
+    const token = jwt.sign({ id: user.id }, JWT_SECRET, { expiresIn: "15m" });
+    const { password: _password, ...userWithoutPassword } = user;
+    return res
+      .status(200)
+      .json({ message: "Login bem-sucedido", token, user: userWithoutPassword });
   } catch (error) {
-    res
+    return res
       .status(500)
       .json({ message: "Erro ao fazer login", error: error.message });
   }

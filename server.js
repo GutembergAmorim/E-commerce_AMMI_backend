@@ -2,13 +2,14 @@ import 'dotenv/config';
 import express from "express";
 import publicRoutes from "./routes/public.js";
 import privateRoutes from "./routes/private.js";
+import authenticate from "./middleware/auth.js";
 
 const app = express();
 app.use(express.json());
 
 // Public and private routes under a common API prefix
 app.use("/api", publicRoutes);
-app.use("/api", privateRoutes);
+app.use("/api", authenticate, privateRoutes);
 
 // Healthcheck endpoint
 app.get("/health", (_, res) => {
